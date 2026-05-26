@@ -128,6 +128,7 @@ export default function WordListManager({
   const [showCreateListModal, setShowCreateListModal] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [newListDesc, setNewListDesc] = useState("");
+  const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
 
   // Filter words belonging to current selected book
   const currentBooksWords = words.filter(w => {
@@ -143,7 +144,7 @@ export default function WordListManager({
   // Pronounce helper
   const handlePronounce = (text: string) => {
     if (!("speechSynthesis" in window)) {
-      alert("您的浏览器不支持语音播放");
+      console.warn("Your browser does not support Speech Synthesis API.");
       return;
     }
     window.speechSynthesis.cancel();
@@ -525,14 +526,44 @@ export default function WordListManager({
                         </td>
 
                         {/* Actions */}
-                        <td className="p-3 align-top text-center">
-                          <button
-                            onClick={() => onDeleteWord(w.id)}
-                            className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 transition-colors inline-block"
-                            title="删除单词"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <td className="p-3 align-top text-center whitespace-nowrap">
+                          {deletingWordId === w.id ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteWord(w.id);
+                                  setDeletingWordId(null);
+                                }}
+                                className="bg-rose-500 hover:bg-rose-600 text-white text-[10px] px-2 py-1 rounded-md font-bold transition-all shadow-sm"
+                              >
+                                确认
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingWordId(null);
+                                }}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] px-2 py-1 rounded-md transition-all font-medium"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingWordId(w.id);
+                              }}
+                              className="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 transition-colors inline-block"
+                              title="删除单词"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -41,6 +41,18 @@ export default function DictationArena({
   // Auto-play TTS on question transition
   const audioPlayedRef = useRef<string | null>(null);
 
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (infoMessage) {
+      const timer = setTimeout(() => {
+        setInfoMessage(null);
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [infoMessage]);
+
   // Get candidates based on criteria
   const getCandidates = (type: "general" | "mistakes") => {
     let pool = [...words];
@@ -63,7 +75,7 @@ export default function DictationArena({
   const startSession = (type: "general" | "mistakes") => {
     const candidates = getCandidates(type);
     if (candidates.length === 0) {
-      alert(type === "mistakes" ? "没有找到错词！所有默写全对，太棒了！" : "没有任何词汇，请先添加生词。");
+      setInfoMessage(type === "mistakes" ? "🎉 没有找到错词！所有默写全对，太棒了！" : "📭 没有任何词汇，请先添加生词。");
       return;
     }
 
@@ -229,20 +241,67 @@ export default function DictationArena({
         </div>
 
         {sessionActive && (
-          <button
-            id="btn-quit-session"
-            onClick={() => {
-              if (confirm("确定要退出本次默写吗？当前进度不会保存。")) {
-                setSessionActive(false);
-                setIsFinished(false);
-              }
-            }}
-            className="text-xs font-semibold bg-indigo-800/40 hover:bg-rose-900/40 text-rose-200 px-3 py-1.5 rounded-lg border border-indigo-700/30 transition-colors"
-          >
-            终止挑战
-          </button>
+          <div className="flex items-center gap-1.5">
+            {showExitConfirm ? (
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-rose-300 font-medium mr-1 animate-pulse hidden sm:inline">退出并作废?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionActive(false);
+                    setIsFinished(false);
+                    setShowExitConfirm(false);
+                  }}
+                  className="text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded-md transition-colors"
+                >
+                  确认
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExitConfirm(false)}
+                  className="text-[10px] font-semibold bg-indigo-800 text-slate-200 px-2 py-1 rounded-md transition-colors"
+                >
+                  取消
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                id="btn-quit-session"
+                onClick={() => setShowExitConfirm(true)}
+                className="text-xs font-semibold bg-indigo-800/40 hover:bg-rose-950/60 hover:text-rose-100 text-rose-200 px-3 py-1.5 rounded-lg border border-indigo-700/30 transition-all"
+              >
+                终止挑战
+              </button>
+            )}
+          </div>
         )}
       </div>
+
+      {/* Toast Alert Info Banner */}
+      <AnimatePresence>
+        {infoMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-[68px] inset-x-0 mx-4 z-40 bg-slate-800 border border-indigo-500/40 text-slate-100 p-3.5 rounded-xl text-xs flex items-start gap-2.5 shadow-lg shadow-black/80"
+          >
+            <AlertCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-slate-100">系统信息</p>
+              <p className="text-slate-300 mt-0.5">{infoMessage}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setInfoMessage(null)}
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Screen 1: NOT STARTED CONFIGURATION */}
       {!sessionActive && (
@@ -282,7 +341,7 @@ export default function DictationArena({
             <button
               onClick={() => {
                 if (mistakePoolCount === 0) {
-                  alert("🎉 太牛了！您目前还没有任何错词记录。进行一次普通默写测验，凡是写错的单词都会收集到这里分类歼灭！");
+                  setInfoMessage("🎉 太棒了！您目前还没有任何错词记录。在普通默写测验中，凡是写错的单词都会自动被捕获到这里。");
                   return;
                 }
                 setTestType("mistakes");

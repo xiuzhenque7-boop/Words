@@ -111,14 +111,12 @@ export default function App() {
 
   // Delete manual or OCR-ed word
   const handleDeleteWord = (id: string) => {
-    if (confirm("确定要删除该单词吗？这会清除其所有默写数据。")) {
-      setWords(prev => prev.filter(w => w.id !== id));
-      // Also remove reference from all binders/lists
-      setLists(prevLists => prevLists.map(lst => ({
-        ...lst,
-        wordIds: lst.wordIds.filter(wid => wid !== id)
-      })));
-    }
+    setWords(prev => prev.filter(w => w.id !== id));
+    // Also remove reference from all binders/lists
+    setLists(prevLists => prevLists.map(lst => ({
+      ...lst,
+      wordIds: lst.wordIds.filter(wid => wid !== id)
+    })));
   };
 
   // Create a brand new customized Notebook
