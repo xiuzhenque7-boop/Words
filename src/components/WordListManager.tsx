@@ -39,6 +39,76 @@ export default function WordListManager({
   const [manualExample, setManualExample] = useState("");
   const [manualExampleTrans, setManualExampleTrans] = useState("");
   const [manualError, setManualError] = useState("");
+  const [autoGenerating, setAutoGenerating] = useState(false);
+
+  const handleAutoFill = async () => {
+    if (!manualWord.trim()) {
+      setManualError("请先输入英文单词，再点击AI补全");
+      return;
+    }
+    setAutoGenerating(true);
+    setManualError("");
+    try {
+      const res = await fetch("/api/generate-word-detail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word: manualWord.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "AI解析词汇失败，请检查网络");
+      }
+      const { phonetic, translation, example, exampleTranslation } = data.detail;
+      setManualPhonetic(phonetic || "");
+      setManualTranslation(translation || "");
+      setManualExample(example || "");
+      setManualExampleTrans(exampleTranslation || "");
+    } catch (err: any) {
+      setManualError(err.message || "智能解析失败，请点击重试或手动录入");
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
+
+  const handleLightningImport = async () => {
+    if (!manualWord.trim()) {
+      setManualError("请先输入英文单词，再点击闪电导入");
+      return;
+    }
+    setAutoGenerating(true);
+    setManualError("");
+    try {
+      const res = await fetch("/api/generate-word-detail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word: manualWord.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "闪电导入解析失败");
+      }
+      const { word, phonetic, translation, example, exampleTranslation } = data.detail;
+      onAddWords([{
+        word: word?.trim() || manualWord.trim(),
+        phonetic: phonetic?.trim() || undefined,
+        translation: translation?.trim() || "未知释义",
+        example: example?.trim() || undefined,
+        exampleTranslation: exampleTranslation?.trim() || undefined,
+        source: "闪电导入"
+      }]);
+      // Reset
+      setManualWord("");
+      setManualPhonetic("");
+      setManualTranslation("");
+      setManualExample("");
+      setManualExampleTrans("");
+      setActiveTab("list");
+    } catch (err: any) {
+      setManualError(err.message || "闪电导入失败，请稍后重试");
+    } finally {
+      setAutoGenerating(false);
+    }
+  };
 
   // States for Camera & Upload OCR
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -52,6 +122,7 @@ export default function WordListManager({
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Create new list states
   const [showCreateListModal, setShowCreateListModal] = useState(false);
@@ -119,6 +190,8 @@ export default function WordListManager({
       const base64Data = event.target?.result as string;
       setOcrImagePreview(base64Data);
       await sendImageToOcr(base64Data);
+      // Clear input value to allow selecting same file again
+      e.target.value = "";
     };
     reader.readAsDataURL(file);
   };
@@ -473,8 +546,13 @@ export default function WordListManager({
         {/* TAB 2: MANUAL ADD */}
         {activeTab === "add-manual" && (
           <form onSubmit={handleManualSubmit} className="space-y-4 max-w-xl mx-auto">
-            <h3 className="text-sm font-semibold text-slate-700">✍️ 录入单个英语新词</h3>
-            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">✍️ 录入单个英语单词</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">只需填入英文，即可使用 AI 瞬间闪电录入或补齐音标释义句</p>
+              </div>
+            </div>
+
             {manualError && (
               <div className="bg-rose-50 border border-rose-100 text-rose-600 p-3 rounded-lg text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -482,73 +560,106 @@ export default function WordListManager({
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-slate-500 font-semibold block mb-1">英文单词 *</label>
+            <div className="bg-indigo-50/40 p-3.5 rounded-xl border border-indigo-100/50 space-y-2">
+              <label className="text-xs text-indigo-900 font-semibold block">第 1 步：输入待办英文生词</label>
+              <div className="relative">
                 <input
                   id="manual-word"
                   type="text"
-                  placeholder="如: extraordinary"
+                  placeholder="请输入想要导入的英文单词，如: meticulous"
                   value={manualWord}
                   onChange={(e) => setManualWord(e.target.value)}
-                  className="w-full text-sm bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  className="w-full text-sm bg-white border border-slate-200 rounded-xl pl-4 pr-12 py-2.5 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                 />
               </div>
 
-              <div>
-                <label className="text-xs text-slate-500 font-semibold block mb-1">英/美式音标 (可选)</label>
-                <input
-                  id="manual-phonetic"
-                  type="text"
-                  placeholder="/ɪkˈstrɔːdnri/"
-                  value={manualPhonetic}
-                  onChange={(e) => setManualPhonetic(e.target.value)}
-                  className="w-full text-sm bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500 font-semibold block mb-1">中文释义 *</label>
-              <input
-                id="manual-translation"
-                type="text"
-                placeholder="如: 非凡的，特出的"
-                value={manualTranslation}
-                onChange={(e) => setManualTranslation(e.target.value)}
-                className="w-full text-sm bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              />
-            </div>
-
-            <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200/50">
-              <span className="text-xs text-indigo-700 font-semibold block">巩固辅助 (例句)</span>
-              
-              <div>
-                <label className="text-[10px] text-slate-500 block mb-0.5">英文例句 (可选)</label>
-                <textarea
-                  id="manual-example"
-                  rows={2}
-                  placeholder="He is a man of extraordinary abilities."
-                  value={manualExample}
-                  onChange={(e) => setManualExample(e.target.value)}
-                  className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] text-slate-500 block mb-0.5">例句中文翻译 (可选)</label>
-                <input
-                  id="manual-example-trans"
-                  type="text"
-                  placeholder="他是一个具有非凡才能的人。"
-                  value={manualExampleTrans}
-                  onChange={(e) => setManualExampleTrans(e.target.value)}
-                  className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                />
+              {/* AI helper action shortcuts */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1.5">
+                <button
+                  type="button"
+                  disabled={autoGenerating || !manualWord.trim()}
+                  onClick={handleAutoFill}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs px-3 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-100"
+                >
+                  {autoGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {autoGenerating ? "正在解析词典..." : "✨ AI一键补全音标/释义/例句"}
+                </button>
+                
+                <button
+                  type="button"
+                  disabled={autoGenerating || !manualWord.trim()}
+                  onClick={handleLightningImport}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs px-3 py-2.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-100"
+                  title="自动分析该词并直接建档导入，体验最速的输入"
+                >
+                  <Check className="w-4 h-4" />
+                  ⚡ 录入英文并闪电一键导入
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="text-[11px] text-slate-400 flex items-center justify-center gap-1 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+              <span>智能模式：AI 将全自动在后台为您配制极佳的发音音标、汉字释义和考点例句</span>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-slate-500 font-semibold block mb-1">英/美式音标 (可选)</label>
+                  <input
+                    id="manual-phonetic"
+                    type="text"
+                    placeholder="/mɪˈtɪkjələs/"
+                    value={manualPhonetic}
+                    onChange={(e) => setManualPhonetic(e.target.value)}
+                    className="w-full text-sm bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-500 font-semibold block mb-1">中文释义 *</label>
+                  <input
+                    id="manual-translation"
+                    type="text"
+                    placeholder="如: 一丝不苟的，谨慎的"
+                    value={manualTranslation}
+                    onChange={(e) => setManualTranslation(e.target.value)}
+                    className="w-full text-sm bg-white border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200/50">
+                <span className="text-xs text-indigo-700 font-bold block">巩固辅助 (例句)</span>
+                
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">英文双语例句</label>
+                  <textarea
+                    id="manual-example"
+                    rows={2}
+                    placeholder="He is very meticulous in his preparation for the dictation exam."
+                    value={manualExample}
+                    onChange={(e) => setManualExample(e.target.value)}
+                    className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">例句中文大意</label>
+                  <input
+                    id="manual-example-trans"
+                    type="text"
+                    placeholder="他在准备单词默写考试时非常一丝不苟。"
+                    value={manualExampleTrans}
+                    onChange={(e) => setManualExampleTrans(e.target.value)}
+                    className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder:text-slate-300"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setActiveTab("list")}
@@ -558,10 +669,11 @@ export default function WordListManager({
               </button>
               <button
                 type="submit"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-5 py-2 rounded-xl flex items-center gap-1 transition-colors shadow-sm"
+                disabled={autoGenerating}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-xs font-semibold px-5 py-2.5 rounded-xl flex items-center gap-1 transition-colors shadow-sm"
               >
                 <Plus className="w-3.5 h-3.5" />
-                确认添加
+                <span>保存并加入单词库</span>
               </button>
             </div>
           </form>
@@ -634,12 +746,17 @@ export default function WordListManager({
                 </button>
 
                 {/* 2. Upload file button */}
-                <div className="relative border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/20 p-6 rounded-2xl text-center flex flex-col items-center justify-center gap-2.5 transition-all group cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/20 p-6 rounded-2xl text-center flex flex-col items-center justify-center gap-2.5 transition-all group cursor-pointer w-full"
+                >
                   <input
+                    ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    className="hidden"
                     onChange={handlePhotoUpload}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                   />
                   <span className="p-3 bg-indigo-50 text-indigo-500 rounded-xl group-hover:scale-110 transition-transform">
                     <Upload className="w-6 h-6" />
@@ -648,7 +765,7 @@ export default function WordListManager({
                     <span className="text-xs font-semibold text-slate-800 block">上传图片或屏幕截图</span>
                     <span className="text-[10px] text-slate-400">支持 JPG, PNG, WEBP 图片格式</span>
                   </div>
-                </div>
+                </button>
               </div>
             )}
 

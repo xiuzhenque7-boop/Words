@@ -46,10 +46,12 @@ app.post("/api/ocr-words", async (req, res) => {
     let mimeType = "image/jpeg";
     let base64Data = image;
 
-    const matches = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-    if (matches && matches.length === 3) {
-      mimeType = matches[1];
-      base64Data = matches[2];
+    if (image?.startsWith("data:")) {
+      const parts = image.split(";base64,");
+      if (parts.length === 2) {
+        mimeType = parts[0].replace("data:", "");
+        base64Data = parts[1];
+      }
     }
 
     const ai = getGeminiClient();
@@ -121,6 +123,73 @@ app.post("/api/ocr-words", async (req, res) => {
   } catch (error: any) {
     console.error("OCR Extract Error:", error);
     return res.status(500).json({ error: error.message || "Failed to analyze image and extract words" });
+  }
+});
+
+// 1.5. Dynamic word properties auto-generation
+app.post("/api/generate-word-detail", async (req, res) => {
+  try {
+    const { word } = req.body;
+    if (!word || !word.trim()) {
+      return res.status(400).json({ error: "Missing english word to analyze" });
+    }
+
+    const ai = getGeminiClient();
+    const promptText = `请解析以下英文单词或词组，并返回标准的词典属性。
+单词： "${word.trim()}"
+
+解析需求：
+1. 请提供该词最纯正的外语英/美式音标。
+2. 请提供该词最常用、最精准的中文解释（包括词性，如 "v. 传达，表达"）。
+3. 必须生成一条极佳的、适合背单词默写的人口语/书面生条例句。例句中必须完整引用该单词的某种时态或语态。
+4. 提供该英文例句的中文翻译。`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: promptText,
+      config: {
+        systemInstruction: "你是一个专业的AI英汉双语词汇学家。请精准解析输入单词并按约定的 schema JSON 返回其音标、多义词汉译和生动例句。",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          required: ["word", "phonetic", "translation", "example", "exampleTranslation"],
+          properties: {
+            word: {
+              type: Type.STRING,
+              description: "输入的原始单词"
+            },
+            phonetic: {
+              type: Type.STRING,
+              description: "该单词的国际音标，如 /kənˈveɪ/"
+            },
+            translation: {
+              type: Type.STRING,
+              description: "最精准全面的核心汉字词译，多义词之间用分号连接，如 'vt. 传达；表达；运输'"
+            },
+            example: {
+              type: Type.STRING,
+              description: "生动实用的造句例句，最好控制在 15 词以内，难度适中"
+            },
+            exampleTranslation: {
+              type: Type.STRING,
+              description: "例句对应的优美、通顺的中文字句"
+            }
+          }
+        }
+      }
+    });
+
+    const resultText = response.text;
+    if (!resultText) {
+      throw new Error("Word details generator returned empty response.");
+    }
+
+    const parsedData = JSON.parse(resultText.trim());
+    return res.json({ success: true, detail: parsedData });
+
+  } catch (error: any) {
+    console.error("Generate Word Detail Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to auto-generate word properties" });
   }
 });
 
